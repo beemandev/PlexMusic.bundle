@@ -41,88 +41,104 @@ def FindNfo(paths, nfo):
 
         nfo_text_lower = nfo_text.lower()
         if nfo_text_lower.count('<'+nfo) > 0 and nfo_text_lower.count('</'+nfo+'>') > 0:
-            # Remove URLs (or other stuff) at the end of the XML file
-            content = nfo_text.rsplit('</'+nfo+'>', 1)[0]
-            nfo_text = '{content}</{nfo}>'.format(content=content,nfo=nfo)
+          # Remove URLs (or other stuff) at the end of the XML file
+          content = nfo_text.rsplit('</'+nfo+'>', 1)[0]
+          nfo_text = '{content}</{nfo}>'.format(content=content,nfo=nfo)
 
-            # likely a kodi nfo file
-            try:
-                nfo_xml = XML.ElementFromString(nfo_text).xpath('//'+nfo)[0]
-            except:
-                Log("ERROR: Cant parse %s from XML in %s Skipping!", nfo, nfo_file)
-                continue
+          # likely a kodi nfo file
+          try:
+            nfo_xml = XML.ElementFromString(nfo_text).xpath('//'+nfo)[0]
+          except:
+            Log("ERROR: Cant parse %s from XML in %s Skipping!", nfo, nfo_file)
+            continue
 
-            nfo_xml = remove_empty_tags(nfo_xml)
-            Log("%s data loaded from file %s", nfo, nfo_file)
-            return nfo_xml
+          nfo_xml = remove_empty_tags(nfo_xml)
+          Log("%s data loaded from file %s", nfo, nfo_file)
+          return nfo_xml
 
 def remove_empty_tags(document):
-    """
-    Removes empty XML tags.
+  """
+  Removes empty XML tags.
 
-    :param document: An HTML element object.
-        see: http://lxml.de/api/lxml.etree._Element-class.html
-    :return:
-    """
-    empty_tags = []
-    for xml_tag in document.iter('*'):
-        if not(len(xml_tag) or (xml_tag.text and xml_tag.text.strip())):
-                empty_tags.append(xml_tag.tag)
-                xml_tag.getparent().remove(xml_tag)
-    Log('Empty XMLTags removed: {number} {tags}'.format(
-        number=len(empty_tags) or None,
-        tags=sorted(set(empty_tags)) or ''
-    ))
-    return document
+  :param document: An HTML element object.
+      see: http://lxml.de/api/lxml.etree._Element-class.html
+  :return:
+  """
+  empty_tags = []
+  for xml_tag in document.iter('*'):
+    if not(len(xml_tag) or (xml_tag.text and xml_tag.text.strip())):
+      empty_tags.append(xml_tag.tag)
+      xml_tag.getparent().remove(xml_tag)
+  Log('Empty XMLTags removed: {number} {tags}'.format(
+    number=len(empty_tags) or None,
+    tags=sorted(set(empty_tags)) or ''
+  ))
+  return document
     
-#searches for artist.nfo in Artist folder and adds fields to the metadata  
-def ReadArtistNfo(metadata, paths, prefs):
+#searches for artist.nfo in Artist folder and adds fields to the metadata if not already set 
+def ReadArtistNfo(metadata, paths):
   nfo_xml = FindNfo(paths,'artist')
   if nfo_xml:
-    if prefs['artistBios'] != 1 or metadata.summary == BLANK_FIELD: 
-      metadata.summary = get_tagnfo(nfo_xml, 'biography')
-      
-    if prefs['genres'] == 0:
-      add_tagsnfo(nfo_xml, metadata.genres, 'genre')
-      add_tagsnfo(nfo_xml, metadata.styles, 'style')
-      add_tagsnfo(nfo_xml, metadata.moods, 'mood')
-
+    metadata.summary = get_tagnfo(nfo_xml, 'biography', metadata.summary)
+    add_tagsnfo(nfo_xml, metadata.genres, 'genre')
+    add_tagsnfo(nfo_xml, metadata.styles, 'style')
+    add_tagsnfo(nfo_xml, metadata.moods, 'mood')
     add_tagsnfo(nfo_xml, metadata.collections, 'tag') #works
 
-    Log('artist fields added from artist.nfo')
-     
+    Log("finished artist nfo import")
+   
     
-#searches for album.nfo in Album folder and  adds fields to the metadata
-def ReadAlbumNfo(metadata, paths, prefs):
+#searches for album.nfo in Album folder and adds fields to the metadata if not already set
+def ReadAlbumNfo(metadata, paths):
   nfo_xml = FindNfo(paths,'album')
   if nfo_xml:
-    if prefs['albumReviews'] != 1 or metadata.summary == BLANK_FIELD: 
-      metadata.summary = get_tagnfo(nfo_xml, 'review')
-      
-    if prefs['genres'] == 0:
-      add_tagsnfo(nfo_xml, metadata.genres, 'genre')
-      add_tagsnfo(nfo_xml, metadata.styles, 'style')
-      add_tagsnfo(nfo_xml, metadata.moods, 'mood')
-      metadata.studio = get_tagnfo(nfo_xml, 'label')
-      
-    add_tagsnfo(nfo_xml, metadata.collections, 'tag') #doesn't work?
+    metadata.summary = get_tagnfo(nfo_xml, 'review', metadata.summary)
+    metadata.studio = get_tagnfo(nfo_xml, 'label', metadata.studio)    
+    metadata.originally_available_at =  get_datenfo(nfo_xml, 'releasedate, metadata.originally_available_at)
     
-    Log('album fields added from album.nfo')
+    add_tagsnfo(nfo_xml, metadata.genres, 'genre')
+    add_tagsnfo(nfo_xml, metadata.styles, 'style')
+    add_tagsnfo(nfo_xml, metadata.moods, 'mood')
+    add_tagsnfo(nfo_xml, metadata.collections, 'tag') #doesn't work? 
+    
+    Log("finished album nfo import")
 
+#returns existing value or if none, gets from nfo 
+def get_tagnfo(nfo_xml, name, value=None):
+  try:
+    if not value or value == BLANK_FIELD:
+      value = nfo_xml.xpath(name)[0].text.strip()
+      Log('added <%s> tag = %s... from nfo', name, value[:50])
+    else:
+      Log('found existing <%s> tag = %s... ignoring nfo', name, value[:20])
+    return value
+  except:
+    Log('Exception getting <%s> tag from nfo', name)
 
-def get_tagnfo(nfo_xml, name):
-    try:
-        return nfo_xml.xpath(name)[0].text
-    except:
-        Log('No <%s> tag in nfo', name)
+#returns existing date or if none, gets from nfo 
+def get_datenfo(nfo_xml, name, value=None):
+  try:
+    if not value:
+      dt = nfo_xml.xpath(name)[0].text.strip()
+      value = Datetime.ParseDate(dt, '%Y-%m-%d').date()
+      Log('added <%s> tag = %s... from nfo', name, value)
+    else:
+      Log('found existing <%s> date = %s, ignoring nfo', name, value)
+    return value
+  except:
+    Log('Exception getting <%s> date from nfo', name)
 
+#adds tags from nfo if no existing ones
 def add_tagsnfo(nfo_xml, metadata_tags, name):
-    try:
-        tags = nfo_xml.xpath(name)
-        metadata_tags.clear()
-        [metadata_tags.add(t.strip()) for tagXML in tags for t in tagXML.text.split('/')]
-    except:
-        Log('No <%s> tag in nfo', name)
+  try:
+    if metadata_tags:
+      Log('found %s existing <%s> tags, ignoring nfo', len(metadata_tags), name)
+      return
+    tags = nfo_xml.xpath(name)
+    [metadata_tags.add(t.strip()) for tagXML in tags for t in tagXML.text.split('/')]
+    Log('added %s <%s> tags from nfo', len(metadata_tags), name)
+  except:
+    Log('exception adding <%s> tags from nfo', name)
         
 Languages = [Locale.Language.English, Locale.Language.Arabic, Locale.Language.Bulgarian, Locale.Language.Chinese, Locale.Language.Croatian,
              Locale.Language.Czech, Locale.Language.Danish, Locale.Language.Dutch, Locale.Language.Finnish, Locale.Language.French,
@@ -168,10 +184,13 @@ def add_graphics(object, graphics):
 
   object.validate_keys(valid_keys)
 
-def add_tags(res, metadata_tags, name):
+#bm added flag to handle clearing
+def add_tags(res, metadata_tags, name, clr=1):
+  #if clr != 2:
   metadata_tags.clear()
-  for tag in res.xpath('//Directory/' + name):
-    metadata_tags.add(tag.get('tag'))
+  if clr != 0:
+    for tag in res.xpath('//Directory/' + name):
+      metadata_tags.add(tag.get('tag'))
 
 class PlexMusicArtistAgent(Agent.Artist):
   name = 'Plex Music'
@@ -200,8 +219,9 @@ class PlexMusicArtistAgent(Agent.Artist):
 
     summary = artist.get('summary')
     metadata.summary = summary if (prefs['artistBios'] == 1 and summary) else BLANK_FIELD
+    #Log('metadata.summary = %s', metadata.summary)
 
-    # Add posters and artwork. #bm Use album flag for artists art as well
+    # Add artist posters and artwork. #bm Use album flag for artists art as well
     if prefs['albumPosters'] != 3:
       add_graphics(metadata.posters, res.xpath('//Directory[@type="artist"]/Thumb'))
       add_graphics(metadata.art, res.xpath('//Directory[@type="artist"]/Art'))
@@ -210,12 +230,9 @@ class PlexMusicArtistAgent(Agent.Artist):
       # metadata.art.validate_keys([])
     
     # Tags.
-    metadata.genres.clear()
-    if prefs['genres'] == 1:
-      add_tags(res, metadata.genres, 'Genre')
-      #bm use genre flag to decide on getting style, mood tags as well
-      add_tags(res, metadata.styles, 'Style')
-      add_tags(res, metadata.moods, 'Mood')
+    add_tags(res, metadata.genres, 'Genre', prefs['genres'])
+    add_tags(res, metadata.styles, 'Style', prefs['genres'])
+    add_tags(res, metadata.moods, 'Mood', prefs['genres'])
 
     add_tags(res, metadata.countries, 'Country')
 
@@ -243,7 +260,7 @@ class PlexMusicArtistAgent(Agent.Artist):
           except:
             pass
 
-    Log("#bm started artist nfo import")
+    Log("started artist nfo import")
     dirs = {}
     
     for a in media.albums:
@@ -253,10 +270,8 @@ class PlexMusicArtistAgent(Agent.Artist):
     
     artist_dirs = GetParentDir(dirs)    
     
-    ReadArtistNfo(metadata, artist_dirs, prefs) 
+    ReadArtistNfo(metadata, artist_dirs) 
     
-    Log("#bm finished artist nfo import")
-
 ##################################################################################
 class PlexMusicAlbumAgent(Agent.Album):
   name = 'Plex Music'
@@ -289,20 +304,18 @@ class PlexMusicAlbumAgent(Agent.Album):
     # Release date.
     if album.get('originallyAvailableAt'):
       metadata.originally_available_at = Datetime.ParseDate(album.get('originallyAvailableAt').split('T')[0])
-
+    
     # Posters, if we want them.
     if prefs['albumPosters'] != 3:
       add_graphics(metadata.posters, res.xpath('//Directory[@type="album"]/Thumb'))
     # else: #bm commented out as unsure if works
       # metadata.posters.validate_keys([])
 
-    # Genres. #bm use genre flag for style, mood, studio
-    metadata.genres.clear()
-    if prefs['genres'] == 1:
-      add_tags(res, metadata.genres, 'Genre')
-      add_tags(res, metadata.styles, 'Style')
-      add_tags(res, metadata.moods, 'Mood')
-      metadata.studio = album.get('studio') or BLANK_FIELD
+    add_tags(res, metadata.genres, 'Genre', prefs['genres'])
+    add_tags(res, metadata.styles, 'Style', prefs['genres'])
+    add_tags(res, metadata.moods, 'Mood', prefs['genres'])
+    
+    metadata.studio = album.get('studio') or BLANK_FIELD
 
     # Build a map of tracks.
     cloud_tracks = {}
@@ -326,12 +339,11 @@ class PlexMusicAlbumAgent(Agent.Album):
           metadata_track.rating_count = int(cloud_track.get('ratingCount') or '0') if use_rating_count else 0
     metadata.tracks.validate_keys(valid_keys)
 
-    Log("#bm started album nfo import")
+    Log("started album nfo import")
     dirs = {}
     
     for t in media.tracks:
-        track = media.tracks[t].items[0]
-        dirs[os.path.dirname(track.parts[0].file)] = True
+      track = media.tracks[t].items[0]
+      dirs[os.path.dirname(track.parts[0].file)] = True
     
-    ReadAlbumNfo(metadata, dirs, prefs) 
-    Log("#bm finished album nfo import")
+    ReadAlbumNfo(metadata, dirs) 
