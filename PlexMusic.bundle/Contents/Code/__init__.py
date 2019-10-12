@@ -110,7 +110,7 @@ def get_tagnfo(nfo_xml, name, value=None):
       value = nfo_xml.xpath(name)[0].text.strip()
       Log('added <%s> tag = %s... from nfo', name, value[:50])
     else:
-      Log('found existing <%s> tag = %s... ignoring nfo', name, value[:20])
+      Log('found existing <%s> tag = %s... ignoring nfo', name, value[:50])
     return value
   except:
     Log('Exception getting <%s> tag from nfo', name)
