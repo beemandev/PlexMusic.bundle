@@ -94,7 +94,7 @@ def ReadAlbumNfo(metadata, paths):
   if nfo_xml:
     metadata.summary = get_tagnfo(nfo_xml, 'review', metadata.summary)
     metadata.studio = get_tagnfo(nfo_xml, 'label', metadata.studio)    
-    metadata.originally_available_at =  get_datenfo(nfo_xml, 'releasedate, metadata.originally_available_at)
+    metadata.originally_available_at =  get_datenfo(nfo_xml, 'releasedate', metadata.originally_available_at)
     
     add_tagsnfo(nfo_xml, metadata.genres, 'genre')
     add_tagsnfo(nfo_xml, metadata.styles, 'style')
